@@ -25,28 +25,15 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Fix Android project structure
+      - name: Prepare Android resources
         run: |
           mkdir -p app/src/main/res/values
-
-          if [ -f build.gradle.kts ]; then
-            mv build.gradle.kts app/build.gradle.kts
-          fi
-
           if [ -f AndroidManifest.xml ]; then
             mv AndroidManifest.xml app/src/main/AndroidManifest.xml
           fi
-
           if [ -f styles.xml ]; then
             mv styles.xml app/src/main/res/values/styles.xml
           fi
-
-          cat > build.gradle.kts <<'EOF'
-          plugins {
-              id("com.android.application") version "8.7.3" apply false
-              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
-          }
-          EOF
 
       - name: Build APK
         run: gradle assembleDebug
@@ -56,3 +43,5 @@ jobs:
         with:
           name: MANIPULATOR-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
+    
