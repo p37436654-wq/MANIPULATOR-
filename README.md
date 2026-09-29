@@ -1,26 +1,29 @@
-# MANIPULATOR
+# MANIPULATOR — Groq Backend
 
-MANIPULATOR is an original futuristic Android personal AI assistant.
+This backend keeps the Groq API key on the server.
 
-## Included
-- Kotlin Android project
-- Jetpack Compose UI
-- Futuristic assistant home screen
-- Username switching
-- Listening state
-- Microphone and Internet permissions
-- Foundation ready for Groq integration
+## Vercel Environment Variable
 
-## Important
-Never put a private Groq API key directly inside the Android APK.
-Use a secure backend/server-side API for production.
+Add:
 
-## Planned features
-1. Groq AI chat
-2. Speech-to-text
-3. Text-to-speech
-4. Command routing
-5. User-consented Android actions
-6. Conversation history
-7. Settings
-8. Release build
+GROQ_API_KEY = your Groq API key
+
+Optional:
+
+GROQ_MODEL = llama-3.1-8b-instant
+
+Do NOT put the Groq key in the Android application.
+
+## API
+
+POST /api/chat
+
+JSON:
+{
+  "message": "Hello MANIPULATOR"
+}
+
+Response:
+{
+  "reply": "Hello Boss..."
+}
