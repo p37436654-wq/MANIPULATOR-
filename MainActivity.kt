@@ -3,121 +3,89 @@ package com.manipulator.ai
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+private const val API_URL = "https://manipulator-8r07kl4py-p37436654-wq.vercel.app/api/chat"
+
+data class ChatMessage(val role: String, val text: String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { ManipulatorApp() }
+        setContent { MaterialTheme { Surface(Modifier.fillMaxSize()) { ManipulatorChat() } } }
     }
 }
 
 @Composable
-private fun ManipulatorApp() {
-    var username by remember { mutableStateOf("Boss") }
-    var listening by remember { mutableStateOf(false) }
+private fun ManipulatorChat() {
+    val messages = remember { mutableStateListOf(ChatMessage("assistant", "MANIPULATOR online. How can I help you, Boss?")) }
+    var input by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
 
-    MaterialTheme {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Color(0xFF050912)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(Modifier.height(28.dp))
-                    Text(
-                        "MANIPULATOR",
-                        color = Color(0xFF00E5FF),
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "PERSONAL AI ASSISTANT",
-                        color = Color.LightGray,
-                        fontSize = 12.sp
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(180.dp)
-                            .background(
-                                if (listening) Color(0xFF003B46)
-                                else Color(0xFF071722),
-                                CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            if (listening) "LISTENING" else "READY",
-                            color = Color(0xFF00E5FF),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(Modifier.height(28.dp))
-
-                    Text(
-                        "Hello, $username",
-                        color = Color.White,
-                        fontSize = 22.sp
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        if (listening) "I'm listening for your command."
-                        else "Tap the button to activate MANIPULATOR.",
-                        color = Color.Gray
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Button(
-                        onClick = { listening = !listening },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF00A9C0)
-                        )
-                    ) {
-                        Text(if (listening) "STOP LISTENING" else "ACTIVATE")
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    OutlinedButton(
-                        onClick = {
-                            username = if (username == "Boss") "User" else "Boss"
-                        }
-                    ) {
-                        Text("Change username")
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Text(
-                        "AI connection: Not configured",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                }
-            }
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text("MANIPULATOR", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(12.dp))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(messages) { msg -> Text(if (msg.role == "user") "You: ${msg.text}" else "MANIPULATOR: ${msg.text}") }
         }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.weight(1f),
+                enabled = !loading,
+                placeholder = { Text("Type a command...") },
+                singleLine = true
+            )
+            Button(enabled = input.isNotBlank() && !loading, onClick = {
+                val text = input.trim()
+                input = ""
+                messages.add(ChatMessage("user", text))
+                loading = true
+            }) { Text(if (loading) "..." else "Send") }
+        }
+    }
+
+    LaunchedEffect(messages.size, loading) {
+        if (loading && messages.lastOrNull()?.role == "user") {
+            val reply = sendMessage(messages.last().text)
+            messages.add(ChatMessage("assistant", reply))
+            loading = false
+        }
+    }
+}
+
+private suspend fun sendMessage(message: String): String = withContext(Dispatchers.IO) {
+    try {
+        val connection = (URL(API_URL).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15000
+            readTimeout = 30000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        val body = JSONObject().put("message", message).toString()
+        connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() } ?: "{}"
+        connection.disconnect()
+        val json = JSONObject(response)
+        if (code !in 200..299) "Server error: ${json.optString("error", "Request failed")}" else json.optString("reply", "No reply received.")
+    } catch (e: Exception) {
+        "Connection error: ${e.message ?: "Unable to reach server"}"
     }
 }
